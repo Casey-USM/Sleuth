@@ -28,14 +28,13 @@ public class SleuthServer implements Runnable{
 			SleuthServer sleuthServer = new SleuthServer();
 			sleuthServer.run();
 		}
-		catch(Exception e) {
-			//TODO send the error message to the client and close
-		}
+		catch(Exception e) {System.exit(1);}
 	}
 	// instance variables
 	private ServerSocket serverSocket;
 	private BufferedReader input = null;
 	private OutputStream output = null;
+	private boolean isRunning = true;
 	// image capturing (can probably be moved into the method)
 	private VideoCapture capture;
 	private Mat image;
@@ -45,22 +44,20 @@ public class SleuthServer implements Runnable{
 		
 	}
 	
-	public void takePicture() {
+	public void takePicture() throws IOException {
 		image = new Mat();
 		capture = new VideoCapture(0);
 		setResolution();
+		// grab an image from the camera
 		capture.read(image);
-		
+		// only keep the capture open for as long as it's needed
+		capture.release();
 		MatOfByte buffer = new MatOfByte();
 		Imgcodecs.imencode(".jpg", image, buffer);
 		
-		//byte[] imageData = imageData = buffer.toArray();
-		//Imgcodecs.imwrite("test.jpg", image);
-		
-		//TODO send the image back to the client
-		
-		// only keep the capture open for as long as it's needed
-		capture.release();
+		byte[] imageData = buffer.toArray();
+		output.write(imageData);
+		output.flush();
 	}
 
 	private void setResolution() {
@@ -71,34 +68,66 @@ public class SleuthServer implements Runnable{
 
 	@Override
 	public void run() {
-		try {server();}
-		catch(IOException e) { 
-			//TODO notify the client and close
+		try {
+			while(isRunning)
+				server();
+		}
+		catch(IOException e) {
+			if(output!=null) {
+				try {
+					writeOut("An error occurred");
+					writeOut(e.getMessage());
+				}
+				catch (IOException e1) {System.exit(1);}
+			}
+			System.exit(1);
 		}
 	}
 	
 	
 	private void server() throws IOException {
-		boolean isRunning = true;
 		// block until a connection is made by the client
 		Socket clientSocket = serverSocket.accept();
 		// get the input and output streams from the client
 		input = new BufferedReader (new InputStreamReader(clientSocket.getInputStream()));
 		output = clientSocket.getOutputStream();
+		System.out.println("Sending prompt");
 		writeOut("Connected to host. Please enter a command:\r\n");
 		while(isRunning) {
+			System.out.println("waiting for command");
 			executeCommands(input, output);
 			
 		}
+		writeOut("Exiting\r\n");
+		clientSocket.close();
 	}
 
-	private void executeCommands(BufferedReader input, OutputStream output) {
-		
-		
+	private void executeCommands(BufferedReader input, OutputStream output) throws IOException {
+		String command = input.readLine();
+		if(command.equalsIgnoreCase("exit") || command.equalsIgnoreCase("quit"))
+			isRunning = false;
+		else if(command.equalsIgnoreCase("snap")) {
+			takePicture();
+		}
+		else if(command.equalsIgnoreCase("help"))
+			printHelp();
+		else
+			printHelp();
 	}
 	
+	private void printHelp() throws IOException {
+		StringBuilder helpMessage = new StringBuilder();
+		helpMessage.append("Sleuth:\r\n");
+		helpMessage.append("The commands are as follows:\r\n");
+		helpMessage.append("\tsnap - takes a pictuire from the remote webcam\r\n");
+		helpMessage.append("\texit or quit- stops the program on the remote machine\r\n");
+		helpMessage.append("\thelp- displays this message\r\n");
+		writeOut(helpMessage.toString());
+	}
+
 	private void writeOut(String out) throws IOException {
 		byte[] bytes = out.getBytes();
 		output.write(bytes);
+		output.flush();
 	}
 }
