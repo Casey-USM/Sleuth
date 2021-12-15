@@ -72,7 +72,7 @@ public class SleuthServer implements Runnable{
 			while(isRunning)
 				server();
 		}
-		catch(IOException e) {
+		catch(Exception e) {
 			if(output!=null) {
 				try {
 					writeOut("An error occurred");
@@ -85,16 +85,14 @@ public class SleuthServer implements Runnable{
 	}
 	
 	
-	private void server() throws IOException {
+	private void server() throws IOException, InterruptedException {
 		// block until a connection is made by the client
 		Socket clientSocket = serverSocket.accept();
 		// get the input and output streams from the client
 		input = new BufferedReader (new InputStreamReader(clientSocket.getInputStream()));
 		output = clientSocket.getOutputStream();
-		System.out.println("Sending prompt");
 		writeOut("Connected to host. Please enter a command:\r\n");
 		while(isRunning) {
-			System.out.println("waiting for command");
 			executeCommands(input, output);
 			
 		}
